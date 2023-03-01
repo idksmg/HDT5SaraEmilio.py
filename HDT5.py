@@ -57,4 +57,39 @@ def process_lifecycle(env, process, ram):
     ram.put(process.memory)
     process.status = 'terminated'
 
+def cpu_scheduler(env, process):
+    with cpu.request() as req:
+        yield req
+        process.status = 'running'
+        while process.instructions > 0:
+            yield env.timeout(1)
+            process.instructions -= INSTRUCTIONS_PER_TIME_UNIT
+            process.cpu_time += 1
+            if process.instructions <= 0:
+                break
+            if process.cpu_time % 3 == 0:
+                if random.randint(1, 2) == 1:
+                    process.status = 'waiting'
+                    env.process(io_scheduler(env, process))
+                    yield env.timeout(1)
+                    process.wait_time += 1
+                else:
+                    process.status = 'ready'
+                    env.process(cpu_scheduler(env, process))
+        process.status = 'terminated'
+
+def io_scheduler(env, process):
+    yield env.timeout(random.randint(1, 2))
+    process.status = 'ready'
+    env.process(cpu_scheduler(env, process))
+
+env = simpy.Environment()
+random.seed(semillaAleatoria)
+cpu = simpy.Resource(env, capacity=CPU_CAPACITY)
+ram = simpy.Container(env, init=MEMORY_CAPACITY, capacity=MEMORY_CAPACITY)
+env.process(process_generator(env, ram))
+env.run(until=NUM_PROCESSES)
+
+
+
 
